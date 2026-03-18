@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=780, user-scalable=no, viewport-fit=cover">
+    <title>pusheen blast</title>
+    <link rel="icon" type="image/gif" href="components/pusheen_combo.gif">
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@600;700&display=swap" rel="stylesheet">
+    <link rel="preload" as="image" href="components/pusheen_cheer.gif">
+</head>
+
+<body>
+    <div class="parallax-bgs">
+        <div class="parallax-layer-1"></div>
+        <div class="parallax-layer-2"></div>
+    </div>
+    <audio id="bg-audio" src="components/bg_music.mp3" loop autoplay></audio>
+
+
+
+    <div id="app">
+        <div class="settings-panel">
+            <button id="mute-btn">🔊</button>
+            <div class="settings-dropdown">
+                <div class="slider-row">
+                    <span>🎵</span>
+                    <input type="range" id="volume-slider" min="0" max="1" step="0.01" value="0.5">
+                </div>
+            </div>
+        </div>
+
+        <div id="game-over-overlay" class="overlay hidden">
+            <div class="modal">
+                <img src="components/pusheen_sad.png" alt="Sad Pusheen">
+                <h2>Game Over!</h2>
+                <p>Score: <span id="final-score">0</span></p>
+                <button id="restart-btn">Try Again</button>
+            </div>
+        </div>
+
+        <header class="header">
+            <div class="score-container" style="position: relative;">
+                <img id="pusheen-mascot" src="components/pusheen_idle.gif" class="header-mascot" alt="Mini Mascot">
+                <div class="score-box">Score<br><span id="score">0</span></div>
+                <div class="score-box">Best<br><span id="best-score">0</span></div>
+            </div>
+        </header>
+
+        <main class="main-content">
+            <div class="board-container">
+                <div id="grid"></div>
+            </div>
+        </main>
+
+        <footer id="tray">
+            <div class="shape-slot" id="slot-0"></div>
+            <div class="shape-slot" id="slot-1"></div>
+            <div class="shape-slot" id="slot-2"></div>
+        </footer>
+    </div>
+
+    <script src="game.js"></script>
+</body>
+
+</html>
