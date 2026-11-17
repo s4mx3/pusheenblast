@@ -15,25 +15,41 @@ const PieceDealer = (() => {
     function deal(board, patterns, random = Math.random) {
         let simulated = board;
         const result = [];
+        let largePieces = 0;
         for (let slot = 0; slot < 3; slot++) {
             const pressure = simulated.flat().filter(v => v !== null).length / (board.length ** 2);
             const candidates = [];
             for (const matrix of patterns) {
                 const size = matrix.flat().reduce((a, b) => a + b, 0);
+                // A small starter provides breathing room; one larger piece keeps
+                // the tray interesting without stacking several difficult shapes.
+                if (slot === 0 && size > 3) continue;
+                if (size >= 5 && largePieces >= 1) continue;
+                if (size >= 9 && pressure > 0.35) continue;
                 const moves = [];
+                let immediateFits = 0;
                 for (let r = 0; r <= board.length - matrix.length; r++) {
                     for (let c = 0; c <= board.length - matrix[0].length; c++) {
+                        if (fits(board, matrix, r, c)) immediateFits++;
                         if (fits(simulated, matrix, r, c)) {
                             const outcome = place(simulated, matrix, r, c);
                             moves.push({ ...outcome, weight: 1 + outcome.lines * (3 + pressure * 8) });
                         }
                     }
                 }
-                if (moves.length) candidates.push({ matrix, moves,
-                    weight: (1 + Math.min(moves.length, 12) / 12) /
-                        (1 + size * pressure * 2) *
-                        (result.includes(matrix) ? 0.3 : 1) *
-                        (size === 1 && pressure < 0.5 ? 0.25 : 1) });
+                if (moves.length) {
+                    const canClear = moves.some(move => move.lines > 0);
+                    // Weight the piece itself for clearing potential, rather than
+                    // only favoring a clearing move after choosing the piece.
+                    const sizeWeight = size <= 3 ? 2.8 : size === 4 ? 1.4 : size < 9 ? 0.65 : 0.2;
+                    candidates.push({ matrix, moves, size,
+                        weight: sizeWeight * (1 + Math.min(moves.length, 16) / 8) /
+                            (1 + Math.max(0, size - 3) * pressure * 3) *
+                            (canClear ? 2 + pressure * 10 : 1) *
+                            (immediateFits > 0 ? 1 : 0.2) *
+                            (result.includes(matrix) ? 0.4 : 1) *
+                            (size === 1 && pressure < 0.5 ? 0.35 : 1) });
+                }
             }
             if (!candidates.length) return result;
             const pick = items => {
@@ -42,6 +58,7 @@ const PieceDealer = (() => {
             };
             const chosen = pick(candidates);
             result.push(chosen.matrix);
+            if (chosen.size >= 5) largePieces++;
             simulated = pick(chosen.moves).board;
         }
         return result;
