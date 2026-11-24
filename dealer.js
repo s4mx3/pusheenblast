@@ -12,56 +12,70 @@ const PieceDealer = (() => {
         next.forEach((row, i) => row.forEach((_, j) => { if (rows[i] || cols[j]) next[i][j] = null; }));
         return { board: next, lines: rows.filter(Boolean).length + cols.filter(Boolean).length };
     }
-    function deal(board, patterns, random = Math.random) {
+    function pickWeighted(items, random) {
+        let ticket = random() * items.reduce((sum, item) => sum + item.weight, 0);
+        return items.find(item => (ticket -= item.weight) < 0) || items[items.length - 1];
+    }
+
+    function deal(board, patterns, random = Math.random, score = 0) {
+        // Introduce heavier trays gradually during the first few thousand points.
+        const progress = Math.min(1, Math.max(0, score / 2400));
+        const largeLimit = progress > .35 && random() < progress * .65 ? 2 : 1;
+        const sizeWeights = {
+            1: .2, 2: 1.7 - progress, 3: 1.5 - .6 * progress,
+            4: .82 + .3 * progress, 5: .34 + .43 * progress,
+            6: .40 + .36 * progress, 9: .18 + .24 * progress
+        };
+        const shapes = patterns.map(matrix => {
+            const rows = matrix.map(row => row.reduce((sum, v) => sum + v, 0));
+            const cols = matrix[0].map((_, j) => matrix.reduce((sum, row) => sum + row[j], 0));
+            return {matrix, rows, cols, size: rows.reduce((sum, n) => sum + n, 0)};
+        });
         let simulated = board;
-        const result = [];
+        const tray = [];
         let largePieces = 0;
-        for (let slot = 0; slot < 3; slot++) {
-            const pressure = simulated.flat().filter(v => v !== null).length / (board.length ** 2);
+        while (tray.length < 3) {
+            const rowGaps = simulated.map(row => row.filter(v => v === null).length);
+            const colGaps = simulated[0].map((_, j) => simulated.filter(row => row[j] === null).length);
             const candidates = [];
-            for (const matrix of patterns) {
-                const size = matrix.flat().reduce((a, b) => a + b, 0);
-                // A small starter provides breathing room; one larger piece keeps
-                // the tray interesting without stacking several difficult shapes.
-                if (slot === 0 && size > 3) continue;
-                if (size >= 5 && largePieces >= 1) continue;
-                if (size >= 9 && pressure > 0.35) continue;
+            for (const shape of shapes) {
+                const {matrix, rows, cols, size} = shape;
+                if (size >= 5 && largePieces >= largeLimit) continue;
                 const moves = [];
-                let immediateFits = 0;
-                for (let r = 0; r <= board.length - matrix.length; r++) {
-                    for (let c = 0; c <= board.length - matrix[0].length; c++) {
-                        if (fits(board, matrix, r, c)) immediateFits++;
-                        if (fits(simulated, matrix, r, c)) {
-                            const outcome = place(simulated, matrix, r, c);
-                            moves.push({ ...outcome, weight: 1 + outcome.lines * (3 + pressure * 8) });
+                let canClear = false;
+                for (let r = 0; r <= board.length - rows.length; r++) {
+                    for (let c = 0; c <= board.length - cols.length; c++) {
+                        if (!fits(simulated, matrix, r, c)) continue;
+                        let lines = 0;
+                        for (let i = 0; i < rows.length; i++) {
+                            if (rows[i] && rows[i] === rowGaps[r+i]) lines++;
                         }
+                        for (let j = 0; j < cols.length; j++) {
+                            if (cols[j] && cols[j] === colGaps[c+j]) lines++;
+                        }
+                        if (lines) canClear = true;
+                        moves.push({r, c, weight: 1 + lines * 2});
                     }
                 }
-                if (moves.length) {
-                    const canClear = moves.some(move => move.lines > 0);
-                    // Weight the piece itself for clearing potential, rather than
-                    // only favoring a clearing move after choosing the piece.
-                    const sizeWeight = size <= 3 ? 2.8 : size === 4 ? 1.4 : size < 9 ? 0.65 : 0.2;
-                    candidates.push({ matrix, moves, size,
-                        weight: sizeWeight * (1 + Math.min(moves.length, 16) / 8) /
-                            (1 + Math.max(0, size - 3) * pressure * 3) *
-                            (canClear ? 2 + pressure * 10 : 1) *
-                            (immediateFits > 0 ? 1 : 0.2) *
-                            (result.includes(matrix) ? 0.4 : 1) *
-                            (size === 1 && pressure < 0.5 ? 0.35 : 1) });
-                }
+                if (!moves.length) continue;
+                const variety = tray.includes(matrix) ? .18 : 1;
+                const clearWeight = canClear ? 1.8 - .65 * progress : 1;
+                const weight = (sizeWeights[size] ?? .4) * variety * clearWeight;
+                candidates.push({shape, moves, weight});
             }
-            if (!candidates.length) return result;
-            const pick = items => {
-                let value = random() * items.reduce((sum, item) => sum + item.weight, 0);
-                return items.find(item => (value -= item.weight) < 0) || items[items.length - 1];
-            };
-            const chosen = pick(candidates);
-            result.push(chosen.matrix);
-            if (chosen.size >= 5) largePieces++;
-            simulated = pick(chosen.moves).board;
+            if (!candidates.length) break;
+            const {shape, moves} = pickWeighted(candidates, random);
+            const move = pickWeighted(moves, random);
+            simulated = place(simulated, shape.matrix, move.r, move.c).board;
+            tray.push(shape.matrix);
+            if (shape.size >= 5) largePieces++;
         }
-        return result;
+        // The simulated order is one solution. Let the player discover it.
+        for (let i = tray.length - 1; i > 0; i--) {
+            const j = Math.floor(random() * (i + 1));
+            [tray[i], tray[j]] = [tray[j], tray[i]];
+        }
+        return tray;
     }
     return { fits, place, deal };
 })();
